@@ -1,21 +1,21 @@
-const express = require('express');
+const express = require("express");
 const app = express();
-const SquareConnect = require('square-connect');
+const SquareConnect = require("square-connect");
 const {
   PaymentsApi,
   OrdersApi,
   LocationsApi,
   CustomersApi,
-  CreateCustomerCardRequest
-} = require('square-connect');
+  CreateCustomerCardRequest,
+} = require("square-connect");
 const defaultClient = SquareConnect.ApiClient.instance;
-const crypto = require('crypto');
-const bodyParser = require('body-parser');
+const crypto = require("crypto");
+const bodyParser = require("body-parser");
 
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 
-let oauth2 = defaultClient.authentications['oauth2'];
+let oauth2 = defaultClient.authentications["oauth2"];
 oauth2.accessToken = process.env.ACCESS_TOKEN;
 
 // Use API_BASE_PATH to switch between sandbox env and production env
@@ -28,7 +28,54 @@ const ordersApi = new OrdersApi();
 const locationsApi = new LocationsApi();
 const customersApi = new CustomersApi();
 
-app.post('/chargeForCookie', async (request, response) => {
+app.post("/customers", async (request, response) => {
+  //const requestBody = request.body;
+  const createOrderRequest = getOrderRequest();
+
+  try {
+    const locations = await locationsApi.listLocations();
+    const locationId = locations.locations[0].id;
+    //const order = await ordersApi.createOrder(locationId, createOrderRequest);
+
+    const createCustomerRequest = {
+      given_name: "Amelia",
+      family_name: "Earhart",
+      email_address: "Amelia.Earhart@example.com",
+      address: {
+        address_line_1: "500 Electric Ave",
+        address_line_2: "Suite 600",
+        locality: "New York",
+        administrative_district_level_1: "NY",
+        postal_code: "10003",
+        country: "US",
+      },
+      phone_number: "1-212-555-4240",
+      reference_id: "ID FROM FIREBASE",
+      note: "a customer",
+    };
+    const createCustomerResponse = await customersApi.createCustomer(
+      createCustomerRequest
+    );
+    console.log(createCustomerResponse.payment);
+
+    response.status(200).json(createCustomerResponse.customer);
+  } catch (e) {
+    delete e.response.req.headers;
+    delete e.response.req._headers;
+    console.log(
+      `[Error] Status:${e.status}, Messages: ${JSON.stringify(
+        JSON.parse(e.response.text).errors,
+        null,
+        2
+      )}`
+    );
+
+    const { errors } = JSON.parse(e.response.text);
+    sendErrorMessage(errors, response);
+  }
+});
+
+app.post("/chargeForCookie", async (request, response) => {
   const requestBody = request.body;
   const createOrderRequest = getOrderRequest();
 
@@ -38,15 +85,17 @@ app.post('/chargeForCookie', async (request, response) => {
     const order = await ordersApi.createOrder(locationId, createOrderRequest);
 
     const createPaymentRequest = {
-      "idempotency_key": crypto.randomBytes(12).toString('hex'),
-      "source_id": requestBody.nonce,
-      "amount_money": {
+      idempotency_key: crypto.randomBytes(12).toString("hex"),
+      source_id: requestBody.nonce,
+      amount_money: {
         ...order.order.total_money,
       },
-      "order_id": order.order.id,
-      "autocomplete": true,
+      order_id: order.order.id,
+      autocomplete: true,
     };
-    const createPaymentResponse = await paymentsApi.createPayment(createPaymentRequest);
+    const createPaymentResponse = await paymentsApi.createPayment(
+      createPaymentRequest
+    );
     console.log(createPaymentResponse.payment);
 
     response.status(200).json(createPaymentResponse.payment);
@@ -54,14 +103,19 @@ app.post('/chargeForCookie', async (request, response) => {
     delete e.response.req.headers;
     delete e.response.req._headers;
     console.log(
-      `[Error] Status:${e.status}, Messages: ${JSON.stringify((JSON.parse(e.response.text)).errors, null, 2)}`);
+      `[Error] Status:${e.status}, Messages: ${JSON.stringify(
+        JSON.parse(e.response.text).errors,
+        null,
+        2
+      )}`
+    );
 
-    const { errors } = (JSON.parse(e.response.text));
+    const { errors } = JSON.parse(e.response.text);
     sendErrorMessage(errors, response);
   }
 });
 
-app.post('/chargeCustomerCard', async (request, response) => {
+app.post("/chargeCustomerCard", async (request, response) => {
   const requestBody = request.body;
   const createOrderRequest = getOrderRequest();
 
@@ -70,13 +124,13 @@ app.post('/chargeCustomerCard', async (request, response) => {
     const locationId = locations.locations[0].id;
     const order = await ordersApi.createOrder(locationId, createOrderRequest);
     const createPaymentRequest = {
-      "idempotency_key": crypto.randomBytes(12).toString('hex'),
-      "customer_id": requestBody.customer_id,
-      "source_id": requestBody.customer_card_id,
-      "amount_money": {
+      idempotency_key: crypto.randomBytes(12).toString("hex"),
+      customer_id: requestBody.customer_id,
+      source_id: requestBody.customer_card_id,
+      amount_money: {
         ...order.order.total_money,
       },
-      "order_id": order.order.id
+      order_id: order.order.id,
     };
     const payment = await paymentsApi.createPayment(createPaymentRequest);
     console.log(payment.payment);
@@ -86,20 +140,28 @@ app.post('/chargeCustomerCard', async (request, response) => {
     delete e.response.req.headers;
     delete e.response.req._headers;
     console.log(
-      `[Error] Status:${e.status}, Messages: ${JSON.stringify((JSON.parse(e.response.text)).errors, null, 2)}`);
+      `[Error] Status:${e.status}, Messages: ${JSON.stringify(
+        JSON.parse(e.response.text).errors,
+        null,
+        2
+      )}`
+    );
 
-    const { errors } = (JSON.parse(e.response.text));
+    const { errors } = JSON.parse(e.response.text);
     sendErrorMessage(errors, response);
   }
 });
 
-app.post('/createCustomerCard', async (request, response) => {
+app.post("/createCustomerCard", async (request, response) => {
   const requestBody = request.body;
   console.log(requestBody);
   try {
     const body = new CreateCustomerCardRequest(requestBody.nonce);
     console.log(body);
-    const customerCardResponse = await customersApi.createCustomerCard(requestBody.customer_id, body);
+    const customerCardResponse = await customersApi.createCustomerCard(
+      requestBody.customer_id,
+      body
+    );
     console.log(customerCardResponse.card);
 
     response.status(200).json(customerCardResponse.card);
@@ -107,16 +169,21 @@ app.post('/createCustomerCard', async (request, response) => {
     delete e.response.req.headers;
     delete e.response.req._headers;
     console.log(
-      `[Error] Status:${e.status}, Messages: ${JSON.stringify((JSON.parse(e.response.text)).errors, null, 2)}`);
+      `[Error] Status:${e.status}, Messages: ${JSON.stringify(
+        JSON.parse(e.response.text).errors,
+        null,
+        2
+      )}`
+    );
 
-    const { errors } = (JSON.parse(e.response.text));
+    const { errors } = JSON.parse(e.response.text);
     sendErrorMessage(errors, response);
   }
 });
 
 function getOrderRequest() {
   return {
-    idempotency_key: crypto.randomBytes(12).toString('hex'),
+    idempotency_key: crypto.randomBytes(12).toString("hex"),
     order: {
       line_items: [
         {
@@ -124,64 +191,70 @@ function getOrderRequest() {
           quantity: "1",
           base_price_money: {
             amount: 100,
-            currency: "USD"
-          }
-        }
-      ]
-    }
-  }
+            currency: "USD",
+          },
+        },
+      ],
+    },
+  };
 }
 
 function sendErrorMessage(errors, response) {
   switch (errors[0].code) {
     case "UNAUTHORIZED":
       response.status(401).send({
-          errorMessage: "Server Not Authorized. Please check your server permission."
+        errorMessage:
+          "Server Not Authorized. Please check your server permission.",
       });
       break;
     case "GENERIC_DECLINE":
       response.status(400).send({
-          errorMessage: "Card declined. Please re-enter card information."
+        errorMessage: "Card declined. Please re-enter card information.",
       });
       break;
     case "CVV_FAILURE":
       response.status(400).send({
-          errorMessage: "Invalid CVV. Please re-enter card information."
+        errorMessage: "Invalid CVV. Please re-enter card information.",
       });
       break;
     case "ADDRESS_VERIFICATION_FAILURE":
       response.status(400).send({
-          errorMessage: "Invalid Postal Code. Please re-enter card information."
+        errorMessage: "Invalid Postal Code. Please re-enter card information.",
       });
       break;
     case "EXPIRATION_FAILURE":
       response.status(400).send({
-          errorMessage: "Invalid expiration date. Please re-enter card information."
+        errorMessage:
+          "Invalid expiration date. Please re-enter card information.",
       });
       break;
     case "INSUFFICIENT_FUNDS":
       response.status(400).send({
-          errorMessage: "Insufficient funds; Please try re-entering card details."
+        errorMessage:
+          "Insufficient funds; Please try re-entering card details.",
       });
       break;
     case "CARD_NOT_SUPPORTED":
       response.status(400).send({
-          errorMessage: "	The card is not supported either in the geographic region or by the MCC; Please try re-entering card details."
+        errorMessage:
+          "	The card is not supported either in the geographic region or by the MCC; Please try re-entering card details.",
       });
       break;
     case "PAYMENT_LIMIT_EXCEEDED":
       response.status(400).send({
-          errorMessage: "Processing limit for this merchant; Please try re-entering card details."
+        errorMessage:
+          "Processing limit for this merchant; Please try re-entering card details.",
       });
       break;
     case "TEMPORARY_ERROR":
       response.status(500).send({
-          errorMessage: "Unknown temporary error; please try again;"
+        errorMessage: "Unknown temporary error; please try again;",
       });
       break;
     default:
       response.status(400).send({
-          errorMessage: "Payment error. Please contact support if issue persists."
+        errorMessage:
+          "Payment error. Please contact support if issue persists.",
       });
       break;
   }
@@ -189,5 +262,5 @@ function sendErrorMessage(errors, response) {
 
 // listen for requests :)
 const listener = app.listen(process.env.PORT, function () {
-  console.log('Your app is listening on port ' + listener.address().port);
+  console.log("Your app is listening on port " + listener.address().port);
 });
