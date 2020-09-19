@@ -29,7 +29,7 @@ const locationsApi = new LocationsApi();
 const customersApi = new CustomersApi();
 
 app.post("/createCustomer", async (request, response) => {
-  //const requestBody = request.body;
+  const requestBody = request.body;
   const createOrderRequest = getOrderRequest();
 
   try {
@@ -38,20 +38,11 @@ app.post("/createCustomer", async (request, response) => {
     //const order = await ordersApi.createOrder(locationId, createOrderRequest);
 
     const createCustomerRequest = {
-      given_name: "Amelia",
-      family_name: "Earhart",
-      email_address: "Amelia.Earhart@example.com",
-      address: {
-        address_line_1: "500 Electric Ave",
-        address_line_2: "Suite 600",
-        locality: "New York",
-        administrative_district_level_1: "NY",
-        postal_code: "10003",
-        country: "US",
-      },
-      phone_number: "1-212-555-4240",
-      reference_id: "ID FROM FIREBASE",
-      note: "a customer",
+      given_name: requestBody.firstName,
+      family_name: requestBody.lastName,
+      email_address: requestBody.email,
+      phone_number: requestBody.phone,
+      reference_id: requestBody.uid,
     };
     const createCustomerResponse = await customersApi.createCustomer(
       createCustomerRequest
